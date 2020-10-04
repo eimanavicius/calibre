@@ -46,7 +46,6 @@ wherever possible in this module.
 #include <locale.h>
 #include <Python.h>
 #include <structseq.h>
-#include <timefuncs.h>
 #include <shlobj.h>
 #include <stdio.h>
 #include <setupapi.h>
@@ -54,10 +53,6 @@ wherever possible in this module.
 #include <cfgmgr32.h>
 #include <stdarg.h>
 #include <time.h>
-
-#define PyStructSequence_GET_ITEM(op, i) \
-    (((PyStructSequence *)(op))->ob_item[i])
-
 
 #define BUFSIZE    512
 #define MAX_DRIVES 26
@@ -381,6 +376,7 @@ extern PyObject *winutil_friendly_name(PyObject *self, PyObject *args);
 extern PyObject *winutil_notify_associations_changed(PyObject *self, PyObject *args);
 extern PyObject *winutil_move_to_trash(PyObject *self, PyObject *args);
 extern PyObject *winutil_manage_shortcut(PyObject *self, PyObject *args);
+extern PyObject *winutil_get_file_id(PyObject *self, PyObject *args);
 
 static PyMethodDef winutil_methods[] = {
     {"special_folder_path", winutil_folder_path, METH_VARARGS,
@@ -472,12 +468,13 @@ be a unicode string. Returns unicode strings."
         "manage_shortcut()\n\nManage a shortcut"
     },
 
+    {"get_file_id", (PyCFunction)winutil_get_file_id, METH_VARARGS,
+        "get_file_id(path)\n\nGet the windows file id (volume_num, file_index_high, file_index_low)"
+    },
+
     {NULL, NULL, 0, NULL}
 };
 
-#if PY_MAJOR_VERSION >= 3
-#define INITERROR return NULL
-#define INITMODULE PyModule_Create(&winutil_module)
 static struct PyModuleDef winutil_module = {
     /* m_base     */ PyModuleDef_HEAD_INIT,
     /* m_name     */ "winutil",
@@ -490,17 +487,10 @@ static struct PyModuleDef winutil_module = {
     /* m_free     */ 0,
 };
 CALIBRE_MODINIT_FUNC PyInit_winutil(void) {
-#else
-#define INITERROR return
-#define INITMODULE Py_InitModule3("winutil", winutil_methods, winutil_doc)
-CALIBRE_MODINIT_FUNC initwinutil(void) {
-#endif
-
-    PyObject *m;
-    m = INITMODULE;
+    PyObject *m = PyModule_Create(&winutil_module);
 
     if (m == NULL) {
-        INITERROR;
+        return NULL;
     }
 
     PyModule_AddIntConstant(m, "CSIDL_ADMINTOOLS", CSIDL_ADMINTOOLS);
@@ -525,7 +515,5 @@ CALIBRE_MODINIT_FUNC initwinutil(void) {
     PyModule_AddIntConstant(m, "CSIDL_STARTUP", CSIDL_STARTUP);
     PyModule_AddIntConstant(m, "CSIDL_COMMON_STARTUP", CSIDL_COMMON_STARTUP);
 
-#if PY_MAJOR_VERSION >= 3
     return m;
-#endif
 }

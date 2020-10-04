@@ -41,7 +41,7 @@ Environment variables
     * ``CALIBRE_SHOW_DEPRECATION_WARNINGS`` - Causes calibre to print deprecation warnings to stdout. Useful for calibre developers.
     * ``CALIBRE_NO_DEFAULT_PROGRAMS`` - Prevent calibre from automatically registering the filetypes it is capable of handling with Windows.
     * ``CALIBRE_USE_DARK_PALETTE`` - Set it to ``1`` to have calibre use dark colors and ``0`` for normal colors (ignored on macOS).
-      On Windows 10 in the absence of this variable, the windows system preference for dark colors is used.
+      On Windows 10 in the absence of this variable, the Windows system preference for dark colors is used.
     * ``SYSFS_PATH`` - Use if sysfs is mounted somewhere other than /sys
     * ``http_proxy``, ``https_proxy`` - Used on Linux to specify an HTTP(S) proxy
 
@@ -71,7 +71,7 @@ Overriding icons, templates, et cetera
     available for calibre, that you can use by going to :guilabel:`Preferences->Interface->Look & Feel->Change Icon theme`.
     The icon themes use the same mechanism as described below for overriding static resources.
 
-calibre allows you to override the static resources, like icons, javascript and
+calibre allows you to override the static resources, like icons, JavaScript and
 templates for the metadata jacket, catalogs, etc. with customized versions that
 you like.  All static resources are stored in the resources sub-folder of the
 calibre install location. On Windows, this is usually :file:`C:\\Program Files\\Calibre2\\app\\resources`.

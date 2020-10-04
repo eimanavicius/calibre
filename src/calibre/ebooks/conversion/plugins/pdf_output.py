@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__ = 'GPL 3'
 __copyright__ = '2012, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -54,7 +54,7 @@ class PDFOutput(OutputFormatPlugin):
             recommended_value=False,
             help=_('Preserve the aspect ratio of the cover, instead'
                 ' of stretching it to fill the full first page of the'
-                ' generated pdf.')),
+                ' generated PDF.')),
         OptionRecommendation(name='pdf_serif_family',
             recommended_value='Times', help=_(
                 'The font family used to render serif fonts. Will work only if the font is available system-wide.')),
@@ -196,7 +196,8 @@ class PDFOutput(OutputFormatPlugin):
         if (oeb.metadata.cover and unicode_type(oeb.metadata.cover[0]) in oeb.manifest.ids):
             cover_id = unicode_type(oeb.metadata.cover[0])
             item = oeb.manifest.ids[cover_id]
-            self.cover_data = item.data
+            if isinstance(item.data, bytes):
+                self.cover_data = item.data
 
     def process_fonts(self):
         ''' Make sure all fonts are embeddable '''

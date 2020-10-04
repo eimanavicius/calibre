@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=utf-8
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__ = 'GPL v3'
 __copyright__ = '2014, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -885,7 +885,7 @@ class InsertSemantics(Dialog):
             ' For example, you can specify that a particular location is the dedication or the preface'
             ' or the Table of Contents and so on.\n\nFirst choose the type of semantic information, then'
             ' choose a file and optionally a location within the file to point to.\n\nThe'
-            ' semantic information will be written in the <guide> section of the opf file.'))
+            ' semantic information will be written in the <guide> section of the OPF file.'))
         d.resize(d.sizeHint())
         d.exec_()
 

@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:fdm=marker:ai
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2012, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -11,7 +11,7 @@ from collections import defaultdict
 from threading import Thread
 
 from calibre import walk, prints, as_unicode
-from calibre.constants import (config_dir, iswindows, isosx, plugins, DEBUG,
+from calibre.constants import (config_dir, iswindows, ismacos, plugins, DEBUG,
         isworker, filesystem_encoding)
 from calibre.utils.fonts.metadata import FontMetadata, UnsupportedFont
 from calibre.utils.icu import sort_key
@@ -103,11 +103,17 @@ def font_dirs():
         winutil, err = plugins['winutil']
         if err:
             raise RuntimeError('Failed to load winutil: %s'%err)
-        try:
-            return [winutil.special_folder_path(winutil.CSIDL_FONTS)]
-        except ValueError:
-            return [r'C:\Windows\Fonts']
-    if isosx:
+        paths = {os.path.normcase(r'C:\Windows\Fonts')}
+        for which in (winutil.CSIDL_FONTS, winutil.CSIDL_LOCAL_APPDATA, winutil.CSIDL_APPDATA):
+            try:
+                path = winutil.special_folder_path(which)
+            except ValueError:
+                continue
+            if which != winutil.CSIDL_FONTS:
+                path = os.path.join(path, r'Microsoft\Windows\Fonts')
+            paths.add(os.path.normcase(path))
+        return list(paths)
+    if ismacos:
         return [
                 '/Library/Fonts',
                 '/System/Library/Fonts',

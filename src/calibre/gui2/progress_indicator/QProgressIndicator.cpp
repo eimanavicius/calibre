@@ -173,6 +173,10 @@ class CalibreStyle: public QProxyStyle {
                     return QFormLayout::FieldsStayAtSizeHint;  // Do not have fields expand to fill all available space in QFormLayout
                 case SH_ScrollBar_Transient:
                     return transient_scroller;
+#ifdef Q_OS_MAC
+				case SH_UnderlineShortcut:
+					return 0;
+#endif
 				default:
                     break;
             }
@@ -192,6 +196,8 @@ class CalibreStyle: public QProxyStyle {
             switch (metric) {
                 case PM_TabBarTabVSpace:
                     return 8;  // Make tab bars a little narrower, the value for the Fusion style is 12
+				case PM_TreeViewIndentation:
+					return 10;  // Reduce indentation in tree views
                 default:
                     break;
             }

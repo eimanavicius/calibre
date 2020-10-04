@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -180,7 +180,11 @@ def create_date_tab(self, db):
     w.h1 = h = QHBoxLayout()
     l.addLayout(h)
     self.date_field = df = add(_("&Search the"), QComboBox(w))
-    vals = [((v['search_terms'] or [k])[0], v['name'] or k) for k, v in db.field_metadata.iter_items() if v.get('datatype', None) == 'datetime']
+    vals = [((v['search_terms'] or [k])[0], v['name'] or k)
+                for k, v in db.field_metadata.iter_items()
+                    if v.get('datatype', None) == 'datetime' or
+                       (v.get('datatype', None) == 'composite' and
+                        v.get('display', {}).get('composite_sort', None) == 'date')]
     for k, v in sorted(vals, key=lambda k_v: sort_key(k_v[1])):
         df.addItem(v, k)
     h.addWidget(df)
@@ -231,6 +235,45 @@ def create_date_tab(self, db):
     l.addStretch(10)
 
 
+def create_template_tab(self):
+    self.simple_tab = w = QWidget(self.tab_widget)
+    self.tab_widget.addTab(w, _("&Template search"))
+
+    w.l = l = QFormLayout(w)
+    l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
+
+    self.template_value_box = le = QLineEdit(w)
+    le.setObjectName('template_value_box')
+    le.setPlaceholderText(_('The value to search for'))
+    le.setToolTip('<p>' +
+                  _("You can use the search test specifications described "
+                    "in the calibre documentation. For example, with Number "
+                    "comparisons you can the relational operators like '>=' etc. "
+                    "With Text comparisons you can use exact, contains "
+                    "or regular expression matches. With Date you can use "
+                    "today, yesterday, etc. Set/not set takes 'true' for set "
+                    "and 'false' for not set.") + '</p>')
+    l.addRow(_('Template &value:'), le)
+
+    self.template_test_type_box = le = QComboBox(w)
+    le.setObjectName('template_test_type_box')
+    for op, desc in [
+            ('t', _('Text')),
+            ('d', _('Date')),
+            ('n', _('Number')),
+            ('b', _('Set/Not set'))]:
+        le.addItem(desc, op)
+    le.setToolTip(_('How the template result will be compared to the value'))
+    l.addRow(_('C&omparison type:'), le)
+
+    from calibre.gui2.dialogs.template_line_editor import TemplateLineEditor
+    self.template_program_box = le = TemplateLineEditor(self.tab_widget)
+    le.setObjectName('template_program_box')
+    le.setPlaceholderText(_('The template that generates the value'))
+    le.setToolTip(_('Right click to open a template editor'))
+    l.addRow(_('Tem&plate:'), le)
+
+
 def setup_ui(self, db):
     self.setWindowTitle(_("Advanced search"))
     self.setWindowIcon(QIcon(I('search.png')))
@@ -247,6 +290,7 @@ def setup_ui(self, db):
     create_adv_tab(self)
     create_simple_tab(self, db)
     create_date_tab(self, db)
+    create_template_tab(self)
 # }}}
 
 
@@ -266,6 +310,13 @@ class SearchDialog(QDialog):
             w = getattr(self, focused_field, None)
             if w is not None:
                 w.setFocus(Qt.OtherFocusReason)
+        elif current_tab == 3:
+            self.template_program_box.setText(
+                      gprefs.get('advanced_search_template_tab_program_field', ''))
+            self.template_value_box.setText(
+                      gprefs.get('advanced_search_template_tab_value_field', ''))
+            self.template_test_type_box.setCurrentIndex(
+                      int(gprefs.get('advanced_search_template_tab_test_field', '0')))
         self.resize(self.sizeHint())
 
     def save_state(self):
@@ -275,6 +326,13 @@ class SearchDialog(QDialog):
             fw = self.tab_widget.focusWidget()
             if fw:
                 gprefs.set('advanced_search_simple_tab_focused_field', fw.objectName())
+        elif self.tab_widget.currentIndex() == 3:
+            gprefs.set('advanced_search_template_tab_program_field',
+                       unicode_type(self.template_program_box.text()))
+            gprefs.set('advanced_search_template_tab_value_field',
+                       unicode_type(self.template_value_box.text()))
+            gprefs.set('advanced_search_template_tab_test_field',
+                       unicode_type(self.template_test_type_box.currentIndex()))
 
     def accept(self):
         self.save_state()
@@ -286,9 +344,9 @@ class SearchDialog(QDialog):
 
     def clear_button_pushed(self):
         w = self.tab_widget.currentWidget()
+        for c in w.findChildren(QComboBox):
+            c.setCurrentIndex(0)
         if w is self.date_tab:
-            for c in w.findChildren(QComboBox):
-                c.setCurrentIndex(0)
             for c in w.findChildren(QSpinBox):
                 c.setValue(c.minimum())
             self.sel_date.setChecked(True)
@@ -308,7 +366,18 @@ class SearchDialog(QDialog):
 
     def search_string(self):
         i = self.tab_widget.currentIndex()
-        return (self.adv_search_string, self.box_search_string, self.date_search_string)[i]()
+        return (self.adv_search_string, self.box_search_string,
+                self.date_search_string, self.template_search_string)[i]()
+
+    def template_search_string(self):
+        template = unicode_type(self.template_program_box.text())
+        value = unicode_type(self.template_value_box.text()).replace('"', '\\"')
+        if template and value:
+            cb = self.template_test_type_box
+            op =  unicode_type(cb.itemData(cb.currentIndex()))
+            l = '{0}#@#:{1}:{2}'.format(template, op, value)
+            return 'template:"' + l + '"'
+        return ''
 
     def date_search_string(self):
         field = unicode_type(self.date_field.itemData(self.date_field.currentIndex()) or '')

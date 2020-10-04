@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -13,7 +13,7 @@ from PyQt5.Qt import (QToolButton, QAction, QIcon, QObject, QMenu,
         QKeySequence)
 
 from calibre import prints
-from calibre.constants import isosx
+from calibre.constants import ismacos
 from calibre.gui2 import Dispatcher
 from calibre.gui2.keyboard import NameConflict
 from polyglot.builtins import unicode_type, string_or_bytes
@@ -201,7 +201,7 @@ class InterfaceAction(QObject):
                         QKeySequence.PortableText) for key in keys])
                 else:
                     self.shortcut_action_for_context_menu = shortcut_action
-                    if isosx:
+                    if ismacos:
                         # In Qt 5 keyboard shortcuts dont work unless the
                         # action is explicitly added to the main window
                         self.gui.addAction(shortcut_action)
@@ -225,8 +225,8 @@ class InterfaceAction(QObject):
 
         :param menu: The QMenu the newly created action will be added to
         :param unique_name: A unique name for this action, this must be
-            globally unique, so make it as descriptive as possible. If in doubt add
-            a uuid to it.
+            globally unique, so make it as descriptive as possible. If in doubt, add
+            an UUID to it.
         :param text: The text of the action.
         :param icon: Either a QIcon or a file name. The file name is passed to
             the I() builtin, so you do not need to pass the full path to the images

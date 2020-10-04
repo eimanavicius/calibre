@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -38,10 +38,17 @@ icon_rule_kinds = [(_('icon with text'), 'icon'),
 class ConditionEditor(QWidget):  # {{{
 
     ACTION_MAP = {
+            'bool2' : (
+                    (_('is true'), 'is true',),
+                    (_('is false'), 'is not true'),
+            ),
             'bool' : (
                     (_('is true'), 'is true',),
+                    (_('is not true'), 'is not true'),
                     (_('is false'), 'is false'),
-                    (_('is undefined'), 'is undefined')
+                    (_('is not false'), 'is not false'),
+                    (_('is undefined'), 'is undefined'),
+                    (_('is defined'), 'is defined'),
             ),
             'ondevice' : (
                     (_('is true'), 'is set',),
@@ -54,7 +61,9 @@ class ConditionEditor(QWidget):  # {{{
             'int' : (
                 (_('is equal to'), 'eq'),
                 (_('is less than'), 'lt'),
-                (_('is greater than'), 'gt')
+                (_('is greater than'), 'gt'),
+                (_('is set'), 'is set'),
+                (_('is not set'), 'is not set')
             ),
             'datetime' : (
                 (_('is equal to'), 'eq'),
@@ -200,6 +209,10 @@ class ConditionEditor(QWidget):  # {{{
         if col:
             m = self.fm[col]
             dt = m['datatype']
+            if dt == 'bool':
+                from calibre.gui2.ui import get_gui
+                if not get_gui().current_db.new_api.pref('bools_are_tristate'):
+                    dt = 'bool2'
             if dt in self.action_map:
                 actions = self.action_map[dt]
             else:
@@ -408,7 +421,7 @@ class RuleEditor(QDialog):  # {{{
         if self.rule_kind != 'color':
             self.remove_button = b = bb.addButton(_('&Remove icon'), bb.ActionRole)
             b.setIcon(QIcon(I('minus.png')))
-            b.setMenu(QMenu())
+            b.setMenu(QMenu(b))
             b.setToolTip('<p>' + _('Remove a previously added icon. Note that doing so will cause rules that use it to stop working.'))
             self.update_remove_button()
 
@@ -504,7 +517,7 @@ class RuleEditor(QDialog):  # {{{
     def filename_button_clicked(self):
         try:
             path = choose_files(self, 'choose_category_icon',
-                        _('Select Icon'), filters=[
+                        _('Select icon'), filters=[
                         (_('Images'), ['png', 'gif', 'jpg', 'jpeg'])],
                     all_files=False, select_only_single_file=True)
             if path:

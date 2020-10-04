@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=utf-8
 
 '''
@@ -6,16 +6,16 @@ Created on 13 Jan 2011
 
 @author: charles
 '''
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import inspect, re, traceback, numbers
-from math import trunc
+from math import trunc, floor, ceil, modf
 
-from calibre import human_readable
+from calibre import human_readable, prints
 from calibre.constants import DEBUG
 from calibre.ebooks.metadata import title_sort
 from calibre.utils.config import tweaks
@@ -126,6 +126,7 @@ class FormatterFunction(object):
     category = 'Unknown'
     arg_count = 0
     aliases = []
+    is_python = True
 
     def evaluate(self, formatter, kwargs, mi, locals, *args):
         raise NotImplementedError()
@@ -284,6 +285,71 @@ class BuiltinDivide(BuiltinFormatterFunction):
         x = float(x if x and x != 'None' else 0)
         y = float(y if y and y != 'None' else 0)
         return unicode_type(x / y)
+
+
+class BuiltinCeiling(BuiltinFormatterFunction):
+    name = 'ceiling'
+    arg_count = 1
+    category = 'Arithmetic'
+    __doc__ = doc = _('ceiling(x) -- returns the smallest integer greater '
+                      'than or equal to x. Throws an exception if x is '
+                      'not a number.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, x):
+        x = float(x if x and x != 'None' else 0)
+        return unicode_type(int(ceil(x)))
+
+
+class BuiltinFloor(BuiltinFormatterFunction):
+    name = 'floor'
+    arg_count = 1
+    category = 'Arithmetic'
+    __doc__ = doc = _('floor(x) -- returns the largest integer less '
+                      'than or equal to x. Throws an exception if x is '
+                      'not a number.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, x):
+        x = float(x if x and x != 'None' else 0)
+        return unicode_type(int(floor(x)))
+
+
+class BuiltinRound(BuiltinFormatterFunction):
+    name = 'round'
+    arg_count = 1
+    category = 'Arithmetic'
+    __doc__ = doc = _('round(x) -- returns the nearest integer to x. '
+                      'Throws an exception if x is not a number.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, x):
+        x = float(x if x and x != 'None' else 0)
+        return unicode_type(int(round(x)))
+
+
+class BuiltinMod(BuiltinFormatterFunction):
+    name = 'mod'
+    arg_count = 2
+    category = 'Arithmetic'
+    __doc__ = doc = _('mod(x) -- returns the remainder of x / y, where x, y, '
+                      'and the result are integers. Throws an exception if '
+                      'either x or y is not a number.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, x, y):
+        x = float(x if x and x != 'None' else 0)
+        y = float(y if y and y != 'None' else 0)
+        return unicode_type(int(x % y))
+
+
+class BuiltinFractionalPart(BuiltinFormatterFunction):
+    name = 'fractional_part'
+    arg_count = 1
+    category = 'Arithmetic'
+    __doc__ = doc = _('fractional_part(x) -- returns the value after the decimal '
+                      'point.  For example, fractional_part(3.14) returns 0.14. '
+                      'Throws an exception if x is not a number.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, x):
+        x = float(x if x and x != 'None' else 0)
+        return unicode_type(modf(x)[0])
 
 
 class BuiltinTemplate(BuiltinFormatterFunction):
@@ -1507,7 +1573,7 @@ class BuiltinVirtualLibraries(BuiltinFormatterFunction):
     arg_count = 0
     category = 'Get values from metadata'
     __doc__ = doc = _('virtual_libraries() -- return a comma-separated list of '
-                      'virtual libraries that contain this book. This function '
+                      'Virtual libraries that contain this book. This function '
                       'works only in the GUI. If you want to use these values '
                       'in save-to-disk or send-to-device templates then you '
                       'must make a custom "Column built from other columns", use '
@@ -1603,27 +1669,144 @@ class BuiltinAuthorSorts(BuiltinFormatterFunction):
         return val_sep.join(n for n in names)
 
 
+class BuiltinConnectedDeviceName(BuiltinFormatterFunction):
+    name = 'connected_device_name'
+    arg_count = 1
+    category = 'Get values from metadata'
+    __doc__ = doc = _("connected_device_name(storage_location) -- if a device is "
+                      "connected then return the device name, otherwise return "
+                      "the empty string. Each storage location on a device can "
+                      "have a different name. The location names are 'main', "
+                      "'carda' and 'cardb'. This function works only in the GUI.")
+
+    def evaluate(self, formatter, kwargs, mi, locals, storage_location):
+        if hasattr(mi, '_proxy_metadata'):
+            # Do the import here so that we don't entangle the GUI when using
+            # command line functions
+            from calibre.gui2.ui import get_gui
+            info = get_gui().device_manager.get_current_device_information()
+            if info is None:
+                return ''
+            try:
+                if storage_location not in {'main', 'carda', 'cardb'}:
+                    raise ValueError(
+                         _('connected_device_name: invalid storage location "{0}"'
+                                    .format(storage_location)))
+                info = info['info'][4]
+                if storage_location not in info:
+                    return ''
+                return info[storage_location]['device_name']
+            except:
+                traceback.print_exc()
+                raise
+        return _('This function can be used only in the GUI')
+
+
+class BuiltinCheckYesNo(BuiltinFormatterFunction):
+    name = 'check_yes_no'
+    arg_count = 4
+    category = 'If-then-else'
+    __doc__ = doc = _('check_yes_no(field_name, is_undefined, is_false, is_true) '
+                      '-- checks the value of the yes/no field named by the '
+                      'lookup key field_name for a value specified by the '
+                      'parameters, returning "yes" if a match is found, otherwise '
+                      'returning an empty string. Set the parameter is_undefined, '
+                      'is_false, or is_true to 1 (the number) to check that '
+                      'condition, otherwise set it to 0. Example: '
+                      'check_yes_no("#bool", 1, 0, 1) returns "yes" if the '
+                      'yes/no field "#bool" is either undefined (neither True '
+                      'nor False) or True. More than one of is_undefined, '
+                      'is_false, or is_true can be set to 1.  This function '
+                      'is usually used by the test() or is_empty() functions.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, field, is_undefined, is_false, is_true):
+        res = getattr(mi, field, None)
+        if res is None:
+            if is_undefined == '1':
+                return 'yes'
+            return ""
+        if not isinstance(res, bool):
+            raise ValueError(_('check_yes_no requires the field be a Yes/No custom column'))
+        if is_false == '1' and not res:
+            return 'yes'
+        if is_true == '1' and res:
+            return 'yes'
+        return ""
+
+
+class BuiltinRatingToStars(BuiltinFormatterFunction):
+    name = 'rating_to_stars'
+    arg_count = 2
+    category = 'Formatting values'
+    __doc__ = doc = _('rating_to_stars(value, use_half_stars) '
+                      '-- Returns the rating as string of star characters. '
+                      'The value is a number between 0 and 5. Set use_half_stars '
+                      'to 1 if you want half star characters for custom ratings '
+                      'columns that support non-integer ratings, for example 2.5.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, value, use_half_stars):
+        if not value:
+            return ''
+        err_msg = _('The rating must be a number between 0 and 5')
+        try:
+            v = float(value) * 2
+        except:
+            raise ValueError(err_msg)
+        if v < 0 or v > 10:
+            raise ValueError(err_msg)
+        from calibre.ebooks.metadata import rating_to_stars
+        return rating_to_stars(v, use_half_stars == '1')
+
+
+class BuiltinSwapAroundArticles(BuiltinFormatterFunction):
+    name = 'swap_around_articles'
+    arg_count = 2
+    category = 'String manipulation'
+    __doc__ = doc = _('swap_around_articles(val, separator) '
+                      '-- returns the val with articles moved to the end. '
+                      'The value can be a list, in which case each member '
+                      'of the list is processed. If the value is a list then '
+                      'you must provide the list value separator. If no '
+                      'separator is provided then the value is treated as '
+                      'being a single value, not a list.')
+
+    def evaluate(self, formatter, kwargs, mi, locals, val, separator):
+        if not val:
+            return ''
+        if not separator:
+            return title_sort(val).replace(',', ';')
+        result = []
+        try:
+            for v in [x.strip() for x in val.split(separator)]:
+                result.append(title_sort(v).replace(',', ';'))
+        except:
+            traceback.print_exc()
+        return separator.join(sorted(result, key=sort_key))
+
+
 _formatter_builtins = [
     BuiltinAdd(), BuiltinAnd(), BuiltinApproximateFormats(), BuiltinAssign(),
     BuiltinAuthorLinks(), BuiltinAuthorSorts(), BuiltinBooksize(),
-    BuiltinCapitalize(), BuiltinCmp(), BuiltinContains(), BuiltinCount(),
-    BuiltinCurrentLibraryName(), BuiltinCurrentLibraryPath(),
+    BuiltinCapitalize(), BuiltinCheckYesNo(), BuiltinCeiling(),
+    BuiltinCmp(), BuiltinConnectedDeviceName(), BuiltinContains(),
+    BuiltinCount(), BuiltinCurrentLibraryName(), BuiltinCurrentLibraryPath(),
     BuiltinDaysBetween(), BuiltinDivide(), BuiltinEval(), BuiltinFirstNonEmpty(),
-    BuiltinField(), BuiltinFinishFormatting(), BuiltinFirstMatchingCmp(),
+    BuiltinField(), BuiltinFinishFormatting(), BuiltinFirstMatchingCmp(), BuiltinFloor(),
     BuiltinFormatDate(), BuiltinFormatNumber(), BuiltinFormatsModtimes(),
-    BuiltinFormatsPaths(), BuiltinFormatsSizes(),
+    BuiltinFormatsPaths(), BuiltinFormatsSizes(), BuiltinFractionalPart(),
     BuiltinHasCover(), BuiltinHumanReadable(), BuiltinIdentifierInList(),
     BuiltinIfempty(), BuiltinLanguageCodes(), BuiltinLanguageStrings(),
     BuiltinInList(), BuiltinListDifference(), BuiltinListEquals(),
     BuiltinListIntersection(), BuiltinListitem(), BuiltinListRe(),
     BuiltinListReGroup(), BuiltinListSort(), BuiltinListUnion(), BuiltinLookup(),
-    BuiltinLowercase(), BuiltinMultiply(), BuiltinNot(), BuiltinOndevice(),
-    BuiltinOr(), BuiltinPrint(), BuiltinRawField(), BuiltinRawList(),
-    BuiltinRe(), BuiltinReGroup(), BuiltinSelect(), BuiltinSeriesSort(),
+    BuiltinLowercase(), BuiltinMod(), BuiltinMultiply(), BuiltinNot(), BuiltinOndevice(),
+    BuiltinOr(), BuiltinPrint(), BuiltinRatingToStars(), BuiltinRawField(), BuiltinRawList(),
+    BuiltinRe(), BuiltinReGroup(), BuiltinRound(), BuiltinSelect(), BuiltinSeriesSort(),
     BuiltinShorten(), BuiltinStrcat(), BuiltinStrcatMax(),
     BuiltinStrcmp(), BuiltinStrInList(), BuiltinStrlen(), BuiltinSubitems(),
-    BuiltinSublist(),BuiltinSubstr(), BuiltinSubtract(), BuiltinSwapAroundComma(),
-    BuiltinSwitch(), BuiltinTemplate(), BuiltinTest(), BuiltinTitlecase(),
+    BuiltinSublist(),BuiltinSubstr(), BuiltinSubtract(), BuiltinSwapAroundArticles(),
+    BuiltinSwapAroundComma(), BuiltinSwitch(),
+    BuiltinTemplate(), BuiltinTest(), BuiltinTitlecase(),
     BuiltinToday(), BuiltinTransliterate(), BuiltinUppercase(),
     BuiltinUserCategories(), BuiltinVirtualLibraries()
 ]
@@ -1631,17 +1814,39 @@ _formatter_builtins = [
 
 class FormatterUserFunction(FormatterFunction):
 
-    def __init__(self, name, doc, arg_count, program_text):
+    def __init__(self, name, doc, arg_count, program_text, is_python):
+        self.is_python = is_python
         self.name = name
         self.doc = doc
         self.arg_count = arg_count
         self.program_text = program_text
+        self.cached_parse_tree = None
+
+    def to_pref(self):
+        return [self.name, self.doc, self.arg_count, self.program_text]
 
 
 tabs = re.compile(r'^\t*')
 
 
+def function_pref_is_python(pref):
+    if isinstance(pref, list):
+        pref = pref[3]
+    if pref.startswith('def'):
+        return True
+    if pref.startswith('program'):
+        return False
+    raise ValueError('Unknown program type in formatter function pref')
+
+
+def function_pref_name(pref):
+    return pref[0]
+
+
 def compile_user_function(name, doc, arg_count, eval_func):
+    if not function_pref_is_python(eval_func):
+        return FormatterUserFunction(name, doc, arg_count, eval_func, False)
+
     def replace_func(mo):
         return mo.group().replace('\t', '    ')
 
@@ -1656,7 +1861,7 @@ class UserFunction(FormatterUserFunction):
     if DEBUG and tweaks.get('enable_template_debug_printing', False):
         print(prog)
     exec(prog, locals_)
-    cls = locals_['UserFunction'](name, doc, arg_count, eval_func)
+    cls = locals_['UserFunction'](name, doc, arg_count, eval_func, True)
     return cls
 
 
@@ -1673,9 +1878,16 @@ def compile_user_template_functions(funcs):
             # then white space differences don't cause them to compare differently
 
             cls = compile_user_function(*func)
+            cls.is_python = function_pref_is_python(func)
             compiled_funcs[cls.name] = cls
-        except:
-            traceback.print_exc()
+        except Exception:
+            try:
+                func_name = func[0]
+            except Exception:
+                func_name = 'Unknown'
+            prints('**** Compilation errors in user template function "%s" ****' % func_name)
+            traceback.print_exc(limit=10)
+            prints('**** End compilation errors in %s "****"' % func_name)
     return compiled_funcs
 
 

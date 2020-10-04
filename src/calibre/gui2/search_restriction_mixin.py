@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=utf-8
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__ = 'GPL v3'
 __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -32,7 +32,7 @@ class SelectNames(QDialog):  # {{{
 
         self._names = QListWidget(self)
         self._names.addItems(sorted(names, key=sort_key))
-        self._names.setSelectionMode(self._names.ExtendedSelection)
+        self._names.setSelectionMode(self._names.MultiSelection)
         l.addWidget(self._names)
 
         self._or = QRadioButton(_('Match any of the selected %s')%txt)
@@ -125,6 +125,8 @@ class CreateVirtualLibrary(QDialog):  # {{{
         self.vl_text.textChanged.connect(self.search_text_changed)
         la2.setBuddy(self.vl_text)
         gl.addWidget(self.vl_text, 1, 1)
+        # Trigger the textChanged signal to initialize the saved searches box
+        self.vl_text.setText(' ')
         self.vl_text.setText(_build_full_search_string(self.gui))
 
         self.sl = sl = QLabel('<p>'+_('Create a Virtual library based on: ')+
@@ -133,7 +135,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
             '<a href="publisher.{2}">{2}</a>, '
             '<a href="series.{3}">{3}</a>, '
             '<a href="search.{4}">{4}</a>.').format(_('Authors'), _('Tags'),
-                                            _('Publishers'), _('Series'), _('Saved searches')))
+                                            _('Publishers'), ngettext('Series', 'Series', 2), _('Saved searches')))
         sl.setWordWrap(True)
         sl.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         sl.linkActivated.connect(self.link_activated)
@@ -150,7 +152,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
             you do will only search within the books in the Virtual library. This
             is a good way to partition your large library into smaller and easier to work with subsets.</p>
 
-            <p>For example you can use a Virtual library to only show you books with the Tag <i>"Unread"</i>
+            <p>For example you can use a Virtual library to only show you books with the tag <i>"Unread"</i>
             or only books by <i>"My favorite author"</i> or only books in a particular series.</p>
 
             <p>More information and examples are available in the
@@ -168,7 +170,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
 
         if editing:
             db = self.gui.current_db
-            virt_libs = db.prefs.get('virtual_libraries', {})
+            virt_libs = db.new_api.pref('virtual_libraries', {})
             for dex,vl in enumerate(sorted(virt_libs.keys(), key=sort_key)):
                 self.vl_name.addItem(vl, virt_libs.get(vl, ''))
                 if vl == editing:
@@ -213,10 +215,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
                     txt = ''
             else:
                 txt = ''
-        if len(searches) > 1:
-            self.saved_searches_label.setPlainText('\n'.join(searches))
-        else:
-            self.saved_searches_label.setPlainText('')
+        self.saved_searches_label.setPlainText('\n'.join(searches))
 
     def name_text_edited(self, new_name):
         self.new_name = unicode_type(new_name)
@@ -330,33 +329,33 @@ class SearchRestrictionMixin(object):
         self.search_based_vl_name = None
         self.search_based_vl = None
 
-        self.virtual_library_menu = QMenu()
+        self.virtual_library_menu = QMenu(self.virtual_library)
         self.virtual_library.setMenu(self.virtual_library_menu)
         self.virtual_library_menu.aboutToShow.connect(self.virtual_library_menu_about_to_show)
 
         self.clear_vl.clicked.connect(lambda x: (self.apply_virtual_library(), self.clear_additional_restriction()))
 
         self.virtual_library_tooltip = \
-            _('Use a "virtual library" to show only a subset of the books present in this library')
+            _('Use a "Virtual library" to show only a subset of the books present in this library')
         self.virtual_library.setToolTip(self.virtual_library_tooltip)
 
         self.search_restriction = ComboBoxWithHelp(self)
         self.search_restriction.setVisible(False)
         self.clear_vl.setText(_("(all books)"))
-        self.ar_menu = QMenu(_('Additional restriction'))
-        self.edit_menu = QMenu(_('Edit Virtual library'))
-        self.rm_menu = QMenu(_('Remove Virtual library'))
+        self.ar_menu = QMenu(_('Additional restriction'), self.virtual_library_menu)
+        self.edit_menu = QMenu(_('Edit Virtual library'), self.virtual_library_menu)
+        self.rm_menu = QMenu(_('Remove Virtual library'), self.virtual_library_menu)
         self.search_restriction_list_built = False
 
     def add_virtual_library(self, db, name, search):
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         virt_libs[name] = search
         db.new_api.set_pref('virtual_libraries', virt_libs)
         db.new_api.clear_search_caches()
 
     def do_create_edit(self, name=None):
         db = self.library_view.model().db
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         cd = CreateVirtualLibrary(self, virt_libs.keys(), editing=name)
         if cd.exec_() == cd.Accepted:
             if name:
@@ -371,26 +370,29 @@ class SearchRestrictionMixin(object):
 
         a = m.addAction(_('Create Virtual library'))
         a.triggered.connect(partial(self.do_create_edit, name=None))
+        db = self.current_db
+        virt_libs = db.new_api.pref('virtual_libraries', {})
 
         a = self.edit_menu
         self.build_virtual_library_list(a, self.do_create_edit)
-        m.addMenu(a)
+        if virt_libs:
+            m.addMenu(a)
 
         a = self.rm_menu
         self.build_virtual_library_list(a, self.remove_vl_triggered)
-        m.addMenu(a)
+        if virt_libs:
+            m.addMenu(a)
 
-        m.addAction(_('Quick select Virtual library'), self.choose_vl_triggerred)
+        if virt_libs:
+            m.addAction(_('Quick select Virtual library'), self.choose_vl_triggerred)
 
         if add_tabs_action:
             if gprefs['show_vl_tabs']:
-                m.addAction(_('Hide virtual library tabs'), self.vl_tabs.disable_bar)
+                m.addAction(_('Hide Virtual library tabs'), self.vl_tabs.disable_bar)
             else:
-                m.addAction(_('Show virtual libraries as tabs'), self.vl_tabs.enable_bar)
+                m.addAction(_('Show Virtual libraries as tabs'), self.vl_tabs.enable_bar)
 
         m.addSeparator()
-
-        db = self.library_view.model().db
 
         a = self.ar_menu
         a.clear()
@@ -419,10 +421,13 @@ class SearchRestrictionMixin(object):
 
         m.addSeparator()
 
-        virt_libs = db.prefs.get('virtual_libraries', {})
         for vl in sorted(virt_libs.keys(), key=sort_key):
-            a = m.addAction(self.checked if vl == current_lib else self.empty, vl.replace('&', '&&'))
-            a.triggered.connect(partial(self.apply_virtual_library, library=vl))
+            is_current = vl == current_lib
+            a = m.addAction(self.checked if is_current else self.empty, vl.replace('&', '&&'))
+            if is_current:
+                a.triggered.connect(self.apply_virtual_library)
+            else:
+                a.triggered.connect(partial(self.apply_virtual_library, library=vl))
 
     def virtual_library_menu_about_to_show(self):
         self.build_virtual_library_menu(self.virtual_library_menu)
@@ -432,7 +437,7 @@ class SearchRestrictionMixin(object):
 
     def apply_virtual_library(self, library=None, update_tabs=True):
         db = self.library_view.model().db
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         if not library:
             db.data.set_base_restriction('')
             db.data.set_base_restriction_name('')
@@ -470,7 +475,7 @@ class SearchRestrictionMixin(object):
 
     def build_virtual_library_list(self, menu, handler):
         db = self.library_view.model().db
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         menu.clear()
         menu.setIcon(self.empty)
 
@@ -489,7 +494,7 @@ class SearchRestrictionMixin(object):
 
     def remove_vl_triggered(self, name=None):
         if not confirm(
-            _('Are you sure you want to remove the virtual library <b>{0}</b>?').format(name),
+            _('Are you sure you want to remove the Virtual library <b>{0}</b>?').format(name),
             'confirm_vl_removal', parent=self):
             return
         self._remove_vl(name, reapply=True)
@@ -497,9 +502,9 @@ class SearchRestrictionMixin(object):
     def choose_vl_triggerred(self):
         from calibre.gui2.tweak_book.widgets import QuickOpen, emphasis_style
         db = self.library_view.model().db
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         if not virt_libs:
-            return error_dialog(self, _('No virtual libraries'), _(
+            return error_dialog(self, _('No Virtual libraries'), _(
                 'No Virtual libraries present, create some first'), show=True)
         example = '<pre>{0}S{1}ome {0}B{1}ook {0}C{1}ollection</pre>'.format(
             '<span style="%s">' % emphasis_style(), '</span>')
@@ -519,7 +524,7 @@ class SearchRestrictionMixin(object):
 
     def _remove_vl(self, name, reapply=True):
         db = self.library_view.model().db
-        virt_libs = db.prefs.get('virtual_libraries', {})
+        virt_libs = db.new_api.pref('virtual_libraries', {})
         virt_libs.pop(name, None)
         db.new_api.set_pref('virtual_libraries', virt_libs)
         if reapply and db.data.get_base_restriction_name() == name:

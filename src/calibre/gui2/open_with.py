@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=utf-8
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__ = 'GPL v3'
 __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -15,7 +15,7 @@ from PyQt5.Qt import (
     QBuffer, QPixmap, QAction, QKeySequence)
 
 from calibre import as_unicode
-from calibre.constants import iswindows, isosx
+from calibre.constants import iswindows, ismacos
 from calibre.gui2 import error_dialog, choose_files, choose_images, elided_text, sanitize_env_vars, Application, choose_osx_app
 from calibre.gui2.widgets2 import Dialog
 from calibre.gui2.progress_indicator import ProgressIndicator
@@ -44,7 +44,7 @@ def run_program(entry, path, parent):
     except Exception as err:
         return error_dialog(
             parent, _('Failed to run'), _(
-            'Failed to run program, click "Show Details" for more information'),
+            'Failed to run program, click "Show details" for more information'),
             det_msg='Command line: %r\n%s' %(cmdline, as_unicode(err)))
     t = Thread(name='WaitProgram', target=process.wait)
     t.daemon = True
@@ -142,11 +142,11 @@ if iswindows:
         except Exception as err:
             return error_dialog(
                 parent, _('Failed to run'), _(
-                'Failed to run program, click "Show Details" for more information'),
+                'Failed to run program, click "Show details" for more information'),
                 det_msg='Command line: %r\n%s' %(cmdline, as_unicode(err)))
     # }}}
 
-elif isosx:
+elif ismacos:
     # macOS {{{
     oprefs = JSONConfig('osx_open_with')
     from calibre.utils.open_with.osx import find_programs, get_icon, entry_to_cmdline, get_bundle_data
@@ -155,7 +155,7 @@ elif isosx:
         return sort_key(entry.get('name') or '')
 
     def finalize_entry(entry):
-        entry['extensions'] = tuple(entry['extensions'])
+        entry['extensions'] = tuple(entry.get('extensions', ()))
         data = get_icon(entry.pop('icon_file', None), as_data=True, pixmap_to_data=pixmap_to_data)
         if data:
             entry['icon_data'] = data
@@ -178,8 +178,9 @@ elif isosx:
             if os.path.isdir(ans):
                 app = get_bundle_data(ans)
                 if app is None:
-                    return error_dialog(parent, _('Invalid Application'), _(
+                    error_dialog(parent, _('Invalid Application'), _(
                         '%s is not a valid macOS application bundle.') % ans, show=True)
+                    return
                 return app
             if not os.access(ans, os.X_OK):
                 error_dialog(parent, _('Cannot execute'), _(
@@ -444,7 +445,7 @@ def register_keyboard_shortcuts(gui=None, finalize=False):
             unique_name = application['uuid']
             func = partial(gui.open_with_action_triggerred, filetype, application)
             ac.triggered.connect(func)
-            gui.keyboard.register_shortcut(unique_name, name, action=ac, group=_('Open With'))
+            gui.keyboard.register_shortcut(unique_name, name, action=ac, group=_('Open with'))
             gui.addAction(ac)
             registered_shortcuts[unique_name] = ac
     if finalize:

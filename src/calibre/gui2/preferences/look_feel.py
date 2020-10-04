@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 
 __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -20,7 +20,7 @@ from PyQt5.Qt import (
 
 from calibre import human_readable
 from calibre.ebooks.metadata.book.render import DEFAULT_AUTHOR_LINK
-from calibre.constants import isosx, iswindows
+from calibre.constants import ismacos, iswindows
 from calibre.ebooks.metadata.sources.prefs import msprefs
 from calibre.gui2 import default_author_link
 from calibre.gui2.dialogs.template_dialog import TemplateDialog
@@ -127,7 +127,7 @@ class IdLinksRuleEdit(Dialog):
         self.l = l = QFormLayout(self)
         l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
         l.addRow(QLabel(_(
-            'The key of the identifier, for example, in isbn:XXX, the key is isbn')))
+            'The key of the identifier, for example, in isbn:XXX, the key is "isbn"')))
         self.key = k = QLineEdit(self)
         l.addRow(_('&Key:'), k)
         l.addRow(QLabel(_(
@@ -383,7 +383,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
 
     def genesis(self, gui):
         self.gui = gui
-        if not isosx and not iswindows:
+        if not ismacos and not iswindows:
             self.label_widget_style.setVisible(False)
             self.opt_ui_style.setVisible(False)
 
@@ -402,7 +402,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         self.default_author_link.changed_signal.connect(self.changed_signal)
         r('gui_layout', config, restart_required=True, choices=[(_('Wide'), 'wide'), (_('Narrow'), 'narrow')])
         r('hidpi', gprefs, restart_required=True, choices=[(_('Automatic'), 'auto'), (_('On'), 'on'), (_('Off'), 'off')])
-        if isosx:
+        if ismacos:
             self.opt_hidpi.setVisible(False), self.label_hidpi.setVisible(False)
         r('ui_style', gprefs, restart_required=True, choices=[(_('System default'), 'system'), (_('calibre style'), 'calibre')])
         r('book_list_tooltips', gprefs)
@@ -412,6 +412,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         r('row_numbers_in_book_list', gprefs)
         r('tag_browser_old_look', gprefs)
         r('tag_browser_hide_empty_categories', gprefs)
+        r('tag_browser_always_autocollapse', gprefs)
         r('tag_browser_show_tooltips', gprefs)
         r('bd_show_cover', gprefs)
         r('bd_overlay_cover_size', gprefs)

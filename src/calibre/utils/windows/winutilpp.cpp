@@ -89,6 +89,29 @@ class wchar_raii {  // {{{
 		void set_ptr(wchar_t *val) { handle = val; }
 }; // }}}
 
+class handle_raii {  // {{{
+	private:
+		HANDLE handle;
+		handle_raii( const handle_raii & ) ;
+		handle_raii & operator=( const handle_raii & ) ;
+
+	public:
+		handle_raii() : handle(INVALID_HANDLE_VALUE) {}
+		handle_raii(HANDLE h) : handle(h) {}
+
+		~handle_raii() {
+			if (handle != INVALID_HANDLE_VALUE) {
+				CloseHandle(handle);
+				handle = INVALID_HANDLE_VALUE;
+			}
+		}
+
+		HANDLE ptr() const { return handle; }
+		void set_ptr(HANDLE val) { handle = val; }
+		explicit operator bool() const { return handle != INVALID_HANDLE_VALUE; }
+
+}; // }}}
+
 class scoped_com_initializer {  // {{{
 	public:
 		scoped_com_initializer() : m_succeded(false) { if (SUCCEEDED(CoInitialize(NULL))) m_succeded = true; }
@@ -99,18 +122,6 @@ class scoped_com_initializer {  // {{{
 		scoped_com_initializer( const scoped_com_initializer & ) ;
 		scoped_com_initializer & operator=( const scoped_com_initializer & ) ;
 }; // }}}
-
-#if PY_MAJOR_VERSION < 3
-static wchar_t*
-PyUnicode_AsWideCharString(PyObject *obj, Py_ssize_t *size) {
-    Py_ssize_t sz = PyUnicode_GET_SIZE(obj) * 4 + 4;
-    wchar_t *ans = (wchar_t*)PyMem_Malloc(sz);
-    memset(ans, 0, sz);
-    Py_ssize_t res = PyUnicode_AsWideChar(reinterpret_cast<PyUnicodeObject*>(obj), ans, (sz / sizeof(wchar_t)) - 1);
-    if (size) *size = res;
-    return ans;
-}
-#endif
 
 static inline int
 py_to_wchar(PyObject *obj, wchar_raii *output) {
@@ -125,6 +136,22 @@ py_to_wchar(PyObject *obj, wchar_raii *output) {
 }
 
 extern "C" {
+
+PyObject*
+winutil_get_file_id(PyObject *self, PyObject *args) {
+	wchar_raii path;
+	if (!PyArg_ParseTuple(args, "O&", py_to_wchar, &path)) return NULL;
+	if (path.ptr()) {
+		handle_raii file_handle(CreateFileW(path.ptr(), 0, 0, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL));
+		if (!file_handle) return PyErr_SetExcFromWindowsErrWithFilenameObject(PyExc_OSError, 0, PyTuple_GET_ITEM(args, 0));
+		BY_HANDLE_FILE_INFORMATION info = {0};
+		BOOL ok = GetFileInformationByHandle(file_handle.ptr(), &info);
+		if (!ok) return PyErr_SetExcFromWindowsErrWithFilenameObject(PyExc_OSError, 0, PyTuple_GET_ITEM(args, 0));
+		unsigned long volnum = info.dwVolumeSerialNumber, index_high = info.nFileIndexHigh, index_low = info.nFileIndexLow;
+		return Py_BuildValue("kkk", volnum, index_high, index_low);
+	}
+	Py_RETURN_NONE;
+}
 
 PyObject *
 winutil_add_to_recent_docs(PyObject *self, PyObject *args) {
@@ -206,7 +233,7 @@ winutil_move_to_trash(PyObject *self, PyObject *args) {
 
 	CComPtr<IShellItem> delete_item;
 	if (FAILED(SHCreateItemFromParsingName(path.ptr(), NULL, IID_PPV_ARGS(&delete_item)))) {
-		PyErr_SetString(PyExc_OSError, "Failed to create shell item");
+		PyErr_Format(PyExc_OSError, "Failed to create shell item for path: %R", PyTuple_GET_ITEM(args, 0));
 		return NULL;
 	}
 

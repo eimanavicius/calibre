@@ -1,4 +1,4 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+
 '''
 Make strings safe for use as ASCII filenames, while trying to preserve as much
 meaning as possible.
@@ -9,10 +9,11 @@ import os
 import shutil
 import time
 from math import ceil
+from contextlib import suppress
 
 from calibre import force_unicode, isbytestring, prints, sanitize_file_name
 from calibre.constants import (
-    filesystem_encoding, iswindows, plugins, preferred_encoding, isosx, ispy3
+    filesystem_encoding, iswindows, plugins, preferred_encoding, ismacos
 )
 from calibre.utils.localization import get_udc
 from polyglot.builtins import iteritems, itervalues, unicode_type, range
@@ -52,7 +53,7 @@ def shorten_component(s, by_what):
 def limit_component(x, limit=254):
     # windows and macs use ytf-16 codepoints for length, linux uses arbitrary
     # binary data, but we will assume utf-8
-    filename_encoding_for_length = 'utf-16' if iswindows or isosx else 'utf-8'
+    filename_encoding_for_length = 'utf-16' if iswindows or ismacos else 'utf-8'
 
     def encoded_length():
         q = x if isinstance(x, bytes) else x.encode(filename_encoding_for_length)
@@ -218,9 +219,10 @@ def case_preserving_open_file(path, mode='wb', mkdir_mode=0o777):
     return ans, fpath
 
 
-def windows_get_fileid(path):
-    ''' The fileid uniquely identifies actual file contents (it is the same for
-    all hardlinks to a file). Similar to inode number on linux. '''
+def old_windows_get_fileid(path):
+    # we dont use this anymore as the win32 implementation reads the windows
+    # registry to convert file times which is slow and breaks on systems with
+    # registry issues.
     import win32file
     from pywintypes import error
     if isbytestring(path):
@@ -235,6 +237,20 @@ def windows_get_fileid(path):
     except (error, EnvironmentError):
         return None
     return data[4], data[8], data[9]
+
+
+def windows_get_fileid(path):
+    ''' The fileid uniquely identifies actual file contents (it is the same for
+    all hardlinks to a file). Similar to inode number on linux. '''
+    try:
+        get_file_id = plugins['winutil'][0].get_file_id
+    except AttributeError:
+        # running from source without updating binary
+        return old_windows_get_fileid(path)
+    if isbytestring(path):
+        path = path.decode(filesystem_encoding)
+    with suppress(OSError):
+        return get_file_id(path)
 
 
 def samefile_windows(src, dst):
@@ -468,7 +484,7 @@ class WindowsAtomicFolderMove(object):
     def delete_originals(self):
         import win32file
         for path in self.handle_map:
-            win32file.DeleteFile(path)
+            win32file.DeleteFileW(path)
         self.close_handles()
 
 
@@ -490,9 +506,9 @@ if iswindows:
     def rename_file(a, b):
         move_file = plugins['winutil'][0].move_file
         if isinstance(a, bytes):
-            a = a.decode('mbcs')
+            a = os.fsdecode(a)
         if isinstance(b, bytes):
-            b = b.decode('mbcs')
+            b = os.fsdecode(b)
         move_file(a, b)
 
 
@@ -629,14 +645,4 @@ def copytree_using_links(path, dest, dest_is_parent=True, filecopyfunc=copyfile)
                 filecopyfunc(src, df)
 
 
-if not ispy3 and not iswindows:
-    # On POSIX in python2 if you pass a unicode path to rmtree
-    # it tries to decode all filenames it encounters while walking
-    # the tree which leads to unicode errors on Linux where there
-    # can be non-decodeable filenames.
-    def rmtree(x, **kw):
-        if not isinstance(x, bytes):
-            x = x.encode('utf-8')
-        return shutil.rmtree(x, **kw)
-else:
-    rmtree = shutil.rmtree
+rmtree = shutil.rmtree
